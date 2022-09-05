@@ -48,8 +48,8 @@ for (g in 1:G) curve(dnorm(x, mean = muT[g])/G, col = g, add = TRUE)
 #   stat_function(fun = function(x) dnorm(x, mean = muT[1])/G, color = "steelblue",size = 0.7) +
 #   stat_function(fun = function(x) dnorm(x, mean = muT[2])/G, color = "firebrick",size = 0.7) +
 #   stat_function(fun = function(x) dnorm(x, mean = muT[3])/G, color = "chartreuse4",size = 0.7) +
-#   theme_bw() 
-# 
+#   theme_bw()
+#
 # ggplot(dat, aes(x = y)) +
 #   geom_histogram(aes(y = ..density..),
 #                  colour = 1, fill = "white") +
@@ -85,7 +85,7 @@ model_code <- '
   for(i in 1:I) {
   gen[i] ~ dnorm(0, 100^-2) # Prior on genotype effect
   }
-  
+
   #
   for(i in 1:G) {
   env[i] ~ dnorm(0, 100^-2) # Prior on genotype effect

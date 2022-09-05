@@ -33,8 +33,8 @@ N <- 100
 muT <- c(-5, 10, 30)
 sigma <- 10
 sg <-  100
-se = 0.001
-st = 1
+se <-  0.001
+st <-  1
 I <-  5
 #lambda <- 12
 set.seed(02)

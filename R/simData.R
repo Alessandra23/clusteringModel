@@ -3,27 +3,22 @@ library(ggplot2)
 
 rm(list = ls())
 
-genData <- function(N, G, I, muT, sigma, sg,se, st){
+genData <- function(N, G, I, muT, sigma, sg, se, st){
 
-  gen <- rnorm(I, 0, sg)
-  env <- rnorm(G, 0, se)
-  g <- rep(1:I, each = N/I)
+  g <- rnorm(I, 0, sg)
+  e <- rnorm(G, 0, se)
+  gen <- rep(1:I, each = N/I)
 
-  # clustering Temp
-  theta <- matrix(rnorm(N * G, 0, 3), ncol = G, nrow = N)
-  pi <- exp(theta) / apply(exp(theta), 1, sum)
-  Z <- rep(NA, N)
-  for (i in 1:N) Z[i] <- sample(1:G, size = 1, prob = pi[i, ])
+  # cluster membership
+  env <- sample(1:G, size = N, replace = TRUE)
 
   # generate mean of the model
-  mu_y <- gen[g] + env[Z]
+  mu_y <- g[gen] + e[env]
   y <- rnorm(N, mu_y, sigma)
-  t <- rnorm(N,muT[Z], st)
-  df <- data.frame(y = y, Z = Z, g = g, t = t)
+  t <- rnorm(N, muT[env], st)
+  df <- data.frame(y = y, env = env, gen = gen, t = t)
 
-  return(df)
-  #blin = blin,
-  #Q = Q))
+  return(list(df = df, g = g, e = e))
 
 }
 
@@ -31,16 +26,17 @@ genData <- function(N, G, I, muT, sigma, sg,se, st){
 G <- 3
 N <- 100
 muT <- c(-5, 10, 30)
-sigma <- 10
-sg <-  100
-se <-  0.001
-st <-  1
-I <-  5
-#lambda <- 12
+sigma <- 1
+sg <- 10
+se <- 10
+st <- 1
+I <- 5
+
 set.seed(02)
 dat <- genData(N = N, G = G, muT = muT, sigma = sigma, I = I, sg = sg, se = se, st = st)
-hist(dat$t, breaks = 30, freq = FALSE)
-for (g in 1:G) curve(dnorm(x, mean = muT[g])/G, col = g, add = TRUE)
+
+hist(dat$df$t, breaks = 30, freq = FALSE)
+for (g in 1:G) curve(dnorm(x, mean = muT[g], sd = st)/G, col = g, add = TRUE)
 
 # ggplot(dat, aes(x = t)) +
 #   geom_histogram(aes(y = ..density..),
@@ -60,48 +56,55 @@ for (g in 1:G) curve(dnorm(x, mean = muT[g])/G, col = g, add = TRUE)
 
 
 model_code <- '
-  model
-  {
+model {
   # Likelihood
-   for (i in 1:N) {
+  for (i in 1:N) {
+    # Model for phenotype
     y[i] ~ dnorm(mu[i], sigma^-2)
-    mu[i] = gen[genotype[i]] + env[Z[i]]
-    Z[i] ~ dcat(pi[1:G])
-    t[i] ~ dnorm(muT[Z[i]], st^-2)
+    mu[i] = g[gen[i]] + e[env[i]] # Note that env here is a parameter
+    # but gen is not
+
+    # Clustering model
+    env[i] ~ dcat(pi[1:G])
+
+    # Continuous environmental variable
+    t[i] ~ dnorm(mu_env[env[i]], st^-2)
    }
 
   # Priors
+
+  # Prior on cluster membership
   pi ~ ddirch(alpha)
 
   for (g in 1:G) {
-    muT_raw[g] ~ dnorm(0, 100^-2)
+    mu_env_raw[g] ~ dnorm(0, 100^-2)
   }
-
   # Make sure these are in order to avoid label switching
-  muT <- sort(muT_raw[1:G])
-
+  mu_env <- sort(mu_env_raw[1:G])
 
   # Prior on genotype effect
   for(i in 1:I) {
-  gen[i] ~ dnorm(0, 100^-2) # Prior on genotype effect
+    g[i] ~ dnorm(0, sigma_g^-2) # Prior on genotype effect
   }
 
-  #
   for(i in 1:G) {
-  env[i] ~ dnorm(0, 100^-2) # Prior on genotype effect
+    e[i] ~ dnorm(0, sigma_e^-2) # Prior on genotype effect
   }
 
   sigma ~ dt(0, 10^-2, 1)T(0,)
   st ~ dt(0, 10^-2, 1)T(0,)
+  sigma_e ~ dt(0, 10^-2, 1)T(0,)
+  sigma_g ~ dt(0, 10^-2, 1)T(0,)
 
   }
 '
 
 # Set up the data
-model_data <- list(N = N, y = dat$y, G = G, I = I, genotype = dat$g, t = dat$t, alpha = rep(1,G))
+model_data <- list(N = N, y = dat$df$y, G = G, I = I, gen = dat$df$gen,
+                   t = dat$df$t, alpha = rep(1,G))
 
 # Choose the parameters to watch
-model_parameters <- c("muT", "sigma", "Z", "pi", "mu", "env", "gen", "st")
+model_parameters <- c("g", "e", "env", "pi", "mu_env", "mu", "sigma", "st")
 
 # Run the model
 model_run <- jags(
@@ -110,22 +113,19 @@ model_run <- jags(
   model.file = textConnection(model_code)
 )
 
-# Results and output of the simulated example, to include convergence checking, output plots, interpretation etc
+# Results and output of the simulated example
 plot(model_run)
 print(model_run)
 
-qplot(model_run$BUGSoutput$median$Z, dat$Z)
-qplot(model_run$BUGSoutput$median$mu, dat$y)
-boxplot(dat$y~dat$Z)
-boxplot(dat$y~dat$g)
+# Plot the posterior cluster membership
+qplot(model_run$BUGSoutput$median$env, dat$df$env) +
+  geom_jitter(width = 0.1, height = 0.1)
 
+# Overall predictions
+qplot(model_run$BUGSoutput$median$mu, dat$df$y) + geom_abline()
 
+# Prediction of genotype effects
+qplot(model_run$BUGSoutput$median$g, dat$g) + geom_abline()
 
-
-
-
-
-
-
-
-
+# Prediction of environment effects
+qplot(model_run$BUGSoutput$median$e, dat$e) + geom_abline()

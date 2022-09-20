@@ -61,8 +61,7 @@ model {
   for (i in 1:N) {
     # Model for phenotype
     y[i] ~ dnorm(mu[i], sigma^-2)
-    mu[i] = g[gen[i]] + e[env[i]] # Note that env here is a parameter
-    # but gen is not
+    mu[i] = g[gen[i]] + e[env[i]] # Note that env here is a parameter but gen is not
 
     # Clustering model
     env[i] ~ dcat(pi[1:G])

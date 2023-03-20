@@ -50,7 +50,8 @@ ggplot(dat$df, aes(x = e_group)) +
   stat_function(fun = function(x) dnorm(x, mean = muE[1])/G2, color = "steelblue",size = 0.7) +
   stat_function(fun = function(x) dnorm(x, mean = muE[2])/G2, color = "firebrick",size = 0.7) +
   stat_function(fun = function(x) dnorm(x, mean = muE[3])/G2, color = "chartreuse4",size = 0.7) +
-  theme_bw()
+  theme_bw() +
+  xlab('Temperature')
 
 
 #plot gen clustering
@@ -150,11 +151,16 @@ print(model_run)
 # Plot the posterior cluster membership
 qplot(model_run$BUGSoutput$median$gen, dat$df$gen) +
   geom_jitter(width = 0.1, height = 0.1) +
-  theme_light()
+  theme_light() +
+  xlab('Estimated group') +
+  ylab('True group')
 
 qplot(model_run$BUGSoutput$median$env, dat$df$env) +
   geom_jitter(width = 0.1, height = 0.1) +
-  theme_light()
+  theme_light() +
+  xlab('Estimated group') +
+  ylab('True group')
+
 
 # Overall predictions
 qplot(model_run$BUGSoutput$median$mu, dat$df$y) + geom_abline() + theme_light()

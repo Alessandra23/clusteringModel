@@ -1,6 +1,7 @@
 library(R2jags)
 library(mvtnorm) # for multivariate normal distribution
 library(ggplot2)
+library(patchwork)
 
 ## -------------------------------------------------------------------------- ##
 ## ------------------ Multivariate model (env) --------------------- ##
@@ -101,15 +102,18 @@ model
   }
 
   # # Prior on variance matrix
-  st_inv <- inverse(st)
-  st[1,1] <- st1^2
-  st[2,2] <- st2^2
-  st[1,2] <- rho * st1 * st2
-  st[2,1] <- st[1,2]
+  # st_inv <- inverse(st)
+  # st[1,1] <- st1^2
+  # st[2,2] <- st2^2
+  # st[1,2] <- rho * st1 * st2
+  # st[2,1] <- st[1,2]
+  #
+  # st1 ~ dt(0, 10^-2, 1)T(0,)
+  # st2 ~ dt(0, 10^-2, 1)T(0,)
+  # rho ~ dunif(-1, 1)
 
-  st1 ~ dt(0, 10^-2, 1)T(0,)
-  st2 ~ dt(0, 10^-2, 1)T(0,)
-  rho ~ dunif(-1, 1)
+  st_inv ~ dwish(stE, NE)
+  st <- inverse(st_inv)
 
   sigma ~ dt(0, 10^-2, 1)T(0,)
   sigma_e ~ dt(0, 10^-2, 1)T(0,)
@@ -120,7 +124,7 @@ model
 
 # Set up the data
 model_data <- list(N = N, y = dat$df$y, G = G, I = I, NE = NE, gen = dat$df$gen,
-                   t = dat$t)#, alpha = rep(1,G))
+                   t = dat$t, stE = diag(NE))#, alpha = rep(1,G))
 
 # Choose the parameters to watch
 model_parameters <- c("g", "e", "env", "pi", "muT", "mu", "sigma", "st")
@@ -236,8 +240,8 @@ model
     env[i] ~ dcat(piE[i, 1:G2])
 
     # Continuous variables
-    g_group[i, 1:NG] ~ dmnorm(mu_gen[gen[i], 1:NG], sgroup_inv)
-    e_group[i, 1:NE] ~ dmnorm(mu_env[env[i], 1: NE], sgroup_inv)
+    g_group[i, 1:NG] ~ dmnorm(mu_gen[gen[i], 1:NG], sgroup_inv_gen)
+    e_group[i, 1:NE] ~ dmnorm(mu_env[env[i], 1: NE], sgroup_inv_env)
 
     for (g in 1:G1) {
       exp_theta_gen[i, g] <- exp(theta_gen[i, g])
@@ -292,15 +296,21 @@ model
   }
 
   # # Prior on variance matrix
-  sgroup_inv <- inverse(sgroup)
-  sgroup[1,1] <- sgroup1^2
-  sgroup[2,2] <- sgroup2^2
-  sgroup[1,2] <- rho * sgroup1 * sgroup2
-  sgroup[2,1] <- sgroup[1,2]
+  # sgroup_inv <- inverse(sgroup)
+  # sgroup[1,1] <- sgroup1^2
+  # sgroup[2,2] <- sgroup2^2
+  # sgroup[1,2] <- rho * sgroup1 * sgroup2
+  # sgroup[2,1] <- sgroup[1,2]
+  #
+  # sgroup1 ~ dt(0, 10^-2, 1)T(0,)
+  # sgroup2 ~ dt(0, 10^-2, 1)T(0,)
+  # rho ~ dunif(-1, 1)
 
-  sgroup1 ~ dt(0, 10^-2, 1)T(0,)
-  sgroup2 ~ dt(0, 10^-2, 1)T(0,)
-  rho ~ dunif(-1, 1)
+  sgroup_inv_gen ~ dwish(sG, NG)
+  sgroup_gen <- inverse(sgroup_inv_gen)
+
+  sgroup_inv_env ~ dwish(sE, NE)
+  sgroup_env <- inverse(sgroup_inv_env)
 
   sigma ~ dt(0, 10^-2, 1)T(0,)
   sigma_e ~ dt(0, 10^-2, 1)T(0,)
@@ -311,10 +321,11 @@ model
 
 # Set up the data
 model_data <- list(N = N, y = dat$df$y, G1 = G1, G2 = G2, NG = NG, NE = NE, gen = dat$df$gen, env = dat$df$env,
-                   g_group = dat$g_group, e_group = dat$e_group) #, alphaG = rep(1,G1), alphaE = rep(1,G2))
+                   g_group = dat$g_group, e_group = dat$e_group, sG = diag(NG), sE = diag(NE)) #, alphaG = rep(1,G1), alphaE = rep(1,G2))
 str(model_data)
 # Choose the parameters to watch
-model_parameters <- c("g", "e", "gen", "env", "piG", "piE", "mu_env", "mu_gen", "mu", "sigma", "sgroup")
+model_parameters <- c("g", "e", "gen", "env", "piG", "piE", "mu_env", "mu_gen",
+                      "mu", "sigma", "sgroup_gen", 'sgroup_env')
 
 # Run the model
 model_run <- jags(

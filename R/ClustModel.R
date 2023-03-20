@@ -1,6 +1,6 @@
-library(R2jags)
+# Clustering + Model
 library(ggplot2)
-library(patchwork)
+library(R2jags)
 
 rm(list = ls())
 
@@ -61,15 +61,15 @@ genData <- function(N, G, I, muT, sigma, sg, se, st, lambda){
 }
 
 
-G <- 2
-N <- 100
-muT <- c(3, 9)
-#muT <- c(30, 50)
+G <- 10
+N <- 3000
+#muT <- c(-5, 10)
+#muT <- c(-20,-5,5,10, 50)
 set.seed(02)
-muT <- runif(20,-10,30)
+muT <- runif(G,-50,100)
 sigma <- 1
-sg <- 1
-se <- 1
+sg <- 10
+se <- 10
 st <- 1
 I <- 10
 lambda <- 12
@@ -79,13 +79,71 @@ dat <- genData(N = N, G = G, muT = muT, sigma = sigma, I = I, sg = sg, se = se, 
 hist(dat$df$t, breaks = 30, freq = FALSE)
 for (g in 1:G) curve(dnorm(x, mean = muT[g], sd = st)/G, col = g, add = TRUE)
 
-ggplot(dat$df, aes(x = t)) +
-  geom_histogram(aes(y = after_stat(density)),
-                 colour = 1, fill = "white") +
-  stat_function(fun = function(x) dnorm(x, mean = muT[1])/G, color = "steelblue", linewidth = 0.7) +
-  stat_function(fun = function(x) dnorm(x, mean = muT[2])/G, color = "firebrick", linewidth = 0.7) +
-  theme_bw() +
-  xlab('Temperature')
+# ggplot(dat$df, aes(x = t)) +
+#   geom_histogram(aes(y = after_stat(density)),
+#                  colour = 1, fill = "white") +
+#   stat_function(fun = function(x) dnorm(x, mean = muT[1])/G, color = "steelblue", linewidth = 0.7) +
+#   stat_function(fun = function(x) dnorm(x, mean = muT[2])/G, color = "firebrick", linewidth = 0.7) +
+#   theme_bw() +
+#   xlab('var')
+
+
+## clustering
+
+model_code_groups <- "
+model
+{
+  # Likelihood
+  for (i in 1:N) {
+    y[i] ~ dnorm(mu_g[Z[i]], sigma^-2)
+    Z[i] ~ dcat(pi[i, 1:G])
+    for (g in 1:G) {
+      exp_theta[i, g] <- exp(theta[i, g])
+      pi[i, g] <- exp(theta[i, g]) / sum(exp_theta[i, 1:G])
+      theta[i, g] ~ dnorm(0, 6^-2)
+    }
+  }
+  # Priors
+  sigma ~ dt(0, 10^-2, 1)T(0,)
+  for (g in 1:G) {
+    mu_g_raw[g] ~ dnorm(0, 100^-2)
+  }
+  # Make sure these are in order to avoid label switching
+  mu_g <- sort(mu_g_raw[1:G])
+}
+"
+
+# Set up the data
+usedG <- 2
+model_data_groups <- list(N = N, y = dat$df$t, G = usedG)
+
+# Choose the parameters to watch
+model_parameters_groups <- c("mu_g", "sigma", "Z", "pi")
+
+# Run the model
+model_run_groups <- jags(
+  data = model_data_groups,
+  parameters.to.save = model_parameters_groups,
+  model.file = textConnection(model_code_groups)
+)
+
+# Simulated results -------------------------------------------------------
+
+# Results and output of the simulated example, to include convergence checking, output plots, interpretation etc
+plot(model_run_groups)
+print(model_run_groups)
+
+
+model_run_groups$BUGSoutput$median$mu_g
+Z <- model_run_groups$BUGSoutput$median$Z
+as.integer(Z)
+
+qplot(dat$df$env, model_run_groups$BUGSoutput$median$Z) +
+  geom_jitter(width = 0.1, height = 0.1) +
+  theme_light()
+
+
+# Applying the model
 
 
 model_code <- '
@@ -96,24 +154,9 @@ model {
     y[i] ~ dnorm(mu[i], sigma^-2)
     mu[i] = g[gen[i]] + e[env[i]] + blin[i] # Note that env here is a parameter but gen is not
     blin[i] = sum(lambda[1:Q] * gamma[gen[i],1:Q] * delta[env[i],1:Q])
-
-    # Clustering model
-    env[i] ~ dcat(pi[1:G])
-
-    # Continuous environmental variable
-    t[i] ~ dnorm(mu_env[env[i]], st^-2)
    }
 
   # Priors
-
-  # Prior on cluster membership
-  pi ~ ddirch(alpha)
-
-  for (g in 1:G) {
-    mu_env_raw[g] ~ dnorm(0, 100^-2)
-  }
-  # Make sure these are in order to avoid label switching
-  mu_env <- sort(mu_env_raw[1:G])
 
   # Prior on genotype effect
   for(i in 1:I) {
@@ -123,7 +166,6 @@ model {
   for(i in 1:G) {
     e[i] ~ dnorm(0, sigma_e^-2) # Prior on environment effect
   }
-
 
   # Priors on gamma
   for(q in 1:Q){
@@ -162,22 +204,20 @@ model {
   lambda = sort(lambda_raw)
 
   sigma ~ dt(0, 10^-2, 1)T(0,)
-  st ~ dt(0, 10^-2, 1)T(0,)
   sigma_e ~ dt(0, 10^-2, 1)T(0,)
   sigma_g ~ dt(0, 10^-2, 1)T(0,)
 
   }
 '
-Gused = 10
+
 # Set up the data
-model_data <- list(N = N, y = dat$df$y, G = Gused, I = I, gen = dat$df$gen, Q = dat$Q,
-                   t = dat$df$t, alpha = rep(1,Gused))
+model_data <- list(N = N, y = dat$df$y, I = I, gen = dat$df$gen, env = as.integer(Z), Q = dat$Q, G = usedG)
 
 # Choose the parameters to watch
-model_parameters <- c("g", "e", "env", "pi", "mu_env", "mu", "sigma", "st", "blin")
+model_parameters <- c("g", "e", "mu", "sigma", "blin")
 
 # Run the model
-model_run <- jags(
+model_run_sep <- jags(
   data = model_data,
   parameters.to.save = model_parameters,
   model.file = textConnection(model_code)
@@ -187,39 +227,38 @@ model_run <- jags(
 plot(model_run)
 print(model_run)
 
-# Plot the posterior cluster membership
-qplot(dat$df$env, model_run$BUGSoutput$median$env) +
-  geom_jitter(width = 0.1, height = 0.1) +
-  theme_light() +
-  labs(y = "Estimated environment cluster", x = 'True environment cluster')
-
-
-# Overall predictions
-p1 <- qplot(dat$df$y, model_run$BUGSoutput$median$mu) +
+qplot(dat$df$y, model_run$BUGSoutput$median$mu) +
   geom_abline()+
   theme_light() +
   labs(x = expression(hat(y)), y = 'y')
-p1
-caret::RMSE(dat$df$y, model_run$BUGSoutput$median$mu)
+round(caret::RMSE(dat$df$y, model_run_sep$BUGSoutput$median$mu), 4)
 
-# Prediction of genotype effects
-g_plot <- qplot(dat$g, model_run$BUGSoutput$median$g) +
-  geom_abline() + theme_bw() +
-  labs(y = expression(hat(g)), x = 'g')
 
-# Prediction of environment effects
-e_plot <- qplot(dat$e, model_run$BUGSoutput$median$e) +
-  geom_abline() + theme_bw() +
-  labs(y = expression(hat(e)), x = 'e')
 
-caret::RMSE(model_run$BUGSoutput$median$e, dat$e)
+# generate the test data
 
-# Prediction of interactio effect
-p2 <- qplot(dat$df$blin, model_run$BUGSoutput$median$blin) +
-  geom_abline() + theme_light() +
-  labs(y = "Estimated interaction", x = 'True interaction')
-p2
+G <- 10
+N <- 3000
+#muT <- c(-5, 10)
+#muT <- c(-20,-5,5,10, 50)
+set.seed(02)
+muT <- runif(G,-50,100)
+sigma <- 1
+sg <- 10
+se <- 10
+st <- 1
+I <- 10
+lambda <- 12
+set.seed(04)
+dat_test <- genData(N = N, G = G, muT = muT, sigma = sigma, I = I, sg = sg, se = se, st = st, lambda = lambda)
+round(caret::RMSE(dat_test$df$y, model_run_sep$BUGSoutput$median$mu), 4)
 
-p1+p2
+RMSE_CplusBammit <- list()
+for(i in c(1:100)){
+  set.seed(i)
+  dat_test <- genData(N = N, G = G, muT = muT, sigma = sigma, I = I, sg = sg, se = se, st = st, lambda = lambda)
+  RMSE_CplusBammit$N3000[i] <- round(caret::RMSE(dat_test$df$y, model_run_sep$BUGSoutput$median$mu), 4)
+}
 
-g_plot + e_plot + p2
+saveRDS(RMSE_CplusBammit, file = 'RMSE_CplusBammit')
+

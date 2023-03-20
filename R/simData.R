@@ -26,11 +26,12 @@ genData <- function(N, G, I, muT, sigma, sg, se, st){
 G <- 3
 N <- 100
 muT <- c(-5, 10, 30)
+muT <- c(3, 9)
 sigma <- 1
 sg <- 10
 se <- 10
 st <- 1
-I <- 5
+I <- 65
 
 set.seed(02)
 dat <- genData(N = N, G = G, muT = muT, sigma = sigma, I = I, sg = sg, se = se, st = st)

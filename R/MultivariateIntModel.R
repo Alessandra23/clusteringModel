@@ -75,16 +75,16 @@ genData <- function(N, G, I, NE, muT, sigma, sg, se, lambda){
 }
 
 
-G <- 2
-N <- 90
+G <- 3
+N <- 600
 NE <- 2
-muT <- matrix(c(-5, 2, -5, 2), ncol = 2, nrow = G)
-#muT <- matrix(c(-5, 0, 2, -5, 0, 2), ncol = 2, nrow = G)
+muT <- matrix(c(-2, 5,10, -10, 0, 10), ncol = 2, nrow = G)
+#muT <- matrix(c(-2, 3, -2,  3), ncol = 2, nrow = G)
 #muT <- matrix(c(0.025, 0.075, 0.125, 30,42,50), ncol = 2, nrow = G)
 sigma <- 1
-sg <- 10
-se <- 10
-I <- 9
+sg <- 1
+se <- 1
+I <- 5
 lambda <- 10
 
 set.seed(02)
@@ -190,12 +190,13 @@ model
 
 
 # Set up the data
-Gused <- 10
+Gused <- 3
 model_data <- list(N = N, y = dat$df$y, G = Gused, I = I, NE = NE, gen = dat$df$gen,
                    t = dat$t, stE = diag(NE), Q = dat$Q)#, alpha = rep(1,G))
 
 # Choose the parameters to watch
-model_parameters <- c("g", "e", "env", "pi", "muT", "mu", "sigma", "st", 'blin')
+model_parameters <- c("g", "e", "env", "pi", "muT", "mu", "sigma", "st", 'blin', 'gamma',
+                      'delta', 'lambda')
 #model_parameters <- c("g")
 
 # Run the model
@@ -209,11 +210,10 @@ model_run <- jags(
 plot(model_run)
 print(model_run)
 
+
 ## see rmse
 round(caret::RMSE(model_run$BUGSoutput$median$mu, dat$df$y),4)
-set.seed(04)
-dat2 <- genData(N = N, G = G, NE = NE, muT = muT, sigma = sigma, I = I, sg = sg, se = se, lambda = lambda)
-round(caret::RMSE(model_run$BUGSoutput$median$mu, dat2$df$y),4)
+
 
 
 # Plot the posterior cluster membership
@@ -237,11 +237,12 @@ qplot(model_run$BUGSoutput$median$e, dat$e) +
   labs(x = 'environment estimated', y = 'environment')
 
 # Prediction of bilinear effect
-qplot(model_run$BUGSoutput$median$blin, dat$df$blin) +
+qplot(dat$df$blin, model_run$BUGSoutput$median$blin) +
   geom_abline() + theme_light() +
   labs(x = expression(hat(int)), y = 'int')
 
 
+caret::RMSE(dat$df$blin, model_run$BUGSoutput$median$blin)
 
 ## --------------------------------------------------------------------------------------- ##
 ## ------------------ Multivariate interaction model  (gen and env) --------------------- ##
@@ -258,7 +259,7 @@ generateBlin <- function(index, Q, stheta = 1){
     for (i in 1:index) {
       theta[i,q] <- rnorm(1, 0, stheta)
     }
-    #theta[index, q] <- -sum(theta[1:(index-1), q])
+
     m <- apply(theta, 2, mean)
     thetaN <- as.matrix(apply(theta, 1, function(x){x-m}))
 
@@ -275,11 +276,39 @@ generateBlin <- function(index, Q, stheta = 1){
   return(variable)
 }
 
+
+# Generate variables of the interaction term ------------------------------
+
+# generateInt <- function(index, Q, stheta = 1) {
+#   # Generate theta matrix
+#   theta <- matrix(rnorm(index * Q, 0, stheta), nrow = index, ncol = Q)
+#
+#   # Calculate the column means of theta
+#   m <- colMeans(theta)
+#
+#   # Center the columns of theta
+#   thetaN <- sweep(theta, 2, m)
+#
+#   # Calculate sqrtTheta
+#   sqrtTheta <- sapply(1:Q, function(q) {
+#     sqrt(1 / sum(thetaN[, q]^2))
+#   })
+#
+#   # Calculate variable
+#   variable <- sweep(thetaN, 2, sqrtTheta, "*")
+#
+#   return(variable)
+# }
+
+
 genData <- function(N, G1, G2, NG, NE, muG, muE, sg, se, sigma, lambda){
 
   Q <- length(lambda)
   g <- rnorm(G1, 0, sg)
   e <- rnorm(G2, 0, se)
+
+  # g <- g - mean(g)
+  # e <- e - mean(e)
 
   sgroupG <- MCMCpack::riwish(NG, diag(NG))
   sgroupE <- MCMCpack::riwish(NE, diag(NE))
@@ -324,7 +353,7 @@ genData <- function(N, G1, G2, NG, NE, muG, muE, sg, se, sigma, lambda){
 
 G1 <- 3
 G2 <- 3
-N <- 90
+N <- 300
 NE <- 2
 NG <- 2
 #muG <- matrix(c(-5, 0, 2, -5, 0, 2), ncol = NG, nrow = G1)
@@ -337,7 +366,7 @@ sg <- 1
 se <- 1
 #sgroup <-  diag(2)
 sigma <- 1
-lambda <- 100
+lambda <- 10
 
 set.seed(02)
 dat <- genData(N = N, G1 = G1, G2 = G2, NG = NG, NE = NE,
@@ -469,8 +498,9 @@ model
 
 
 # Set up the data
-model_data <- list(N = N, y = dat$df$y, G1 = G1, G2 = G2, NG = NG, NE = NE, gen = dat$df$gen, env = dat$df$env,
-                   g_group = dat$g_group, e_group = dat$e_group, sG = diag(NG), sE = diag(NE), Q = dat$Q) #, alphaG = rep(1,G1), alphaE = rep(1,G2))
+model_data <- list(N = N, y = dat$df$y, G1 = G1, G2 = G2, NG = NG, NE = NE,
+                   g_group = dat$g_group, e_group = dat$e_group, sG = diag(NG),
+                   sE = diag(NE), Q = dat$Q) #, alphaG = rep(1,G1), alphaE = rep(1,G2))
 str(model_data)
 # Choose the parameters to watch
 model_parameters <- c("g", "e", "gen", "env", "piG", "piE", "mu_env", "mu_gen",
@@ -500,7 +530,8 @@ p2 <- qplot(model_run$BUGSoutput$median$gen, dat$df$gen) +
   labs(x = 'genotypic cluster', y = 'genotypic cluster estimated')
 
 
-p1 + p2
+p1
+p2
 
 # Overall predictions
 qplot(model_run$BUGSoutput$median$mu, dat$df$y) +
@@ -522,6 +553,7 @@ qplot(model_run$BUGSoutput$median$blin, dat$df$blin) +
   geom_abline() + theme_light() +
   labs(x = expression(hat(int)), y = 'int')
 
+caret::RMSE(model_run$BUGSoutput$median$blin, dat$df$blin)
 
 model_run$BUGSoutput$median$blin
 dat$df$blin
@@ -606,8 +638,8 @@ model
 
 
 # Set up the data
-usedG <- 2
-usedE <- 2
+usedG <- 3
+usedE <- 3
 model_data_groupsG <- list(N = N, G1 = G1, NG = NG, gen = dat$df$gen,
                           g_group = dat$g_group, sG = diag(NG))
 model_data_groupsE <- list(N = N, G2 = G2, NE = NE, env = dat$df$env,

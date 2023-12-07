@@ -1,6 +1,11 @@
 library(R2jags)
+library(ggplot2)
 
 rm(list = ls())
+
+
+
+# Generate the data -------------------------------------------------------
 
 genData <- function(N, G1, G2, muG, muE, sg, se, sgroup, sigma){
 
@@ -26,10 +31,11 @@ genData <- function(N, G1, G2, muG, muE, sg, se, sgroup, sigma){
 }
 
 G1 <- 3
-G2 <- 3
+G2 <- 10
 N <- 200
 muG <- c(-5, 10, 30)
-muE <- c(-10, 0, 10)
+#muE <- c(-10, 0, 10)
+muE <- runif(G2, -20, 50)
 sg <- 1
 se <- 1
 sgroup <-  1
@@ -129,7 +135,7 @@ model {
 '
 
 # Set up the data
-model_data <- list(N = N, y = dat$df$y, G1 = G1, G2 = G2, gen = dat$df$gen, env = dat$df$enf,
+model_data <- list(N = N, y = dat$df$y, G1 = G1, G2 = G2,
                    g_group = dat$df$g_group, e_group = dat$df$e_group, alphaG = rep(1,G1),
                    alphaE = rep(1,G2))
 

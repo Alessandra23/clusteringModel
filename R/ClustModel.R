@@ -61,8 +61,8 @@ genData <- function(N, G, I, muT, sigma, sg, se, st, lambda){
 }
 
 
-G <- 10
-N <- 3000
+G <- 3
+N <- 100
 #muT <- c(-5, 10)
 #muT <- c(-20,-5,5,10, 50)
 set.seed(02)
@@ -114,7 +114,7 @@ model
 "
 
 # Set up the data
-usedG <- 2
+usedG <- 10
 model_data_groups <- list(N = N, y = dat$df$t, G = usedG)
 
 # Choose the parameters to watch

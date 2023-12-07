@@ -5,7 +5,6 @@ library(ggplot2)
 
 rm(list = ls())
 
-
 # just one variable
 
 # generate data -----------------------------------------------------------
@@ -21,7 +20,6 @@ genData <- function(N, G, muT, sigma, se, st){
   df <- data.frame(y = y, env = env, t = t)
 
   return(list(df = df, e = e))
-
 }
 
 

@@ -72,7 +72,7 @@ sg <- 1
 se <- 1
 st <- 1
 I <- 10
-lambda <- 12
+lambda <- 100
 set.seed(02)
 dat <- genData(N = N, G = G, muT = muT, sigma = sigma, I = I, sg = sg, se = se, st = st, lambda = lambda)
 
@@ -168,7 +168,7 @@ model {
 
   }
 '
-Gused = 10
+Gused = 2
 # Set up the data
 model_data <- list(N = N, y = dat$df$y, G = Gused, I = I, gen = dat$df$gen, Q = dat$Q,
                    t = dat$df$t, alpha = rep(1,Gused))
